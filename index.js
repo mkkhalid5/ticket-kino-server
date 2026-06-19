@@ -1,5 +1,5 @@
 const dns = require('node:dns');
-dns.setServers(['1.1.1.1', '1.0.0.1']); 
+dns.setServers(['1.1.1.1', '1.0.0.1']);
 
 const express = require("express");
 const dontenv = require("dotenv");
@@ -33,7 +33,34 @@ async function run() {
     await client.connect();
     const db = client.db("ticket-kino");
 
- 
+    const ticketCollections = db.collection("allticket");
+    //create ticket
+    app.post('/api/allticket', async (req, res) => {
+      const ticket = req.body;
+      console.log('req-Ticket:', ticket);
+      const result = await ticketCollections.insertOne(ticket);
+      console.log('result:', result);
+      res.send(result);
+    });
+
+    app.get('/api/allticket', async (req, res) => {
+      try {
+        const query = {};
+
+        if (req.query.vendorEmail) {
+          query.vendorEmail = req.query.vendorEmail;
+        }
+
+        const tickets = await ticketCollections.find(query).toArray();
+
+        res.send(tickets);
+      } catch (e) {
+        console.error("Error:", e);
+        res.status(500).send({ error: "Internal Server Error" });
+      }
+    });
+
+
 
     await client.db("admin").command({ ping: 1 });
     console.log(
