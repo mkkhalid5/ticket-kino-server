@@ -60,6 +60,22 @@ async function run() {
       }
     });
 
+    app.patch('/api/allticket/:id', async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const result = await ticketCollections.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            adminApproval: status
+          }
+        }
+      );
+
+      res.send(result);
+    })
+
 
 
     await client.db("admin").command({ ping: 1 });
