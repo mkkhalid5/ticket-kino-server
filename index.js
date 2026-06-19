@@ -43,22 +43,35 @@ async function run() {
       res.send(users);
     });
 
+    app.get('/api/ticket-kino/users/:email', async (req, res) => {
+      const {email} = req.params;
+      const users = await userCollections.find({email:email}).toArray();
+      res.send(users);
+    });
+
     app.patch('/api/ticket-kino/users/:id', async (req, res) => {
       const { id } = req.params;
-      const {role, status} = req.body;
-      
+      const { role, status } = req.body;
+      const user = await userCollections.findOne({
+        _id: new ObjectId(id),
+      });
       const result = await userCollections.updateOne(
-        {_id: new ObjectId(id)},
+        { _id: new ObjectId(id) },
         {
           $set: {
-            role: role,
-            status: status
-          }
+            role,
+            status,
+          },
         }
-      ) 
+      );
+      if (status === "fraud") {
+        const deleteResult = await ticketCollections.deleteMany({
+          vendorEmail: user.email,
+        });
+        console.log("Deleted tickets:", deleteResult.deletedCount);
+      }
       res.send(result);
-
-    })
+    });
 
     //create ticket
     app.post('/api/allticket', async (req, res) => {
