@@ -34,6 +34,32 @@ async function run() {
     const db = client.db("ticket-kino");
 
     const ticketCollections = db.collection("allticket");
+    const advertiseCollections = db.collection("advertise");
+    const userCollections = db.collection("user");
+
+    //get all user
+    app.get('/api/ticket-kino/users', async (req, res) => {
+      const users = await userCollections.find().toArray();
+      res.send(users);
+    });
+
+    app.patch('/api/ticket-kino/users/:id', async (req, res) => {
+      const { id } = req.params;
+      const {role, status} = req.body;
+      
+      const result = await userCollections.updateOne(
+        {_id: new ObjectId(id)},
+        {
+          $set: {
+            role: role,
+            status: status
+          }
+        }
+      ) 
+      res.send(result);
+
+    })
+
     //create ticket
     app.post('/api/allticket', async (req, res) => {
       const ticket = req.body;
@@ -62,20 +88,19 @@ async function run() {
 
     app.patch('/api/allticket/:id', async (req, res) => {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, ad } = req.body;
 
       const result = await ticketCollections.updateOne(
         { _id: new ObjectId(id) },
         {
           $set: {
-            adminApproval: status
+            adminApproval: status,
+            advertise: ad || ''
           }
         }
       );
-
       res.send(result);
     })
-
 
 
     await client.db("admin").command({ ping: 1 });
