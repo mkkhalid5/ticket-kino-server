@@ -44,8 +44,8 @@ async function run() {
     });
 
     app.get('/api/ticket-kino/users/:email', async (req, res) => {
-      const {email} = req.params;
-      const users = await userCollections.find({email:email}).toArray();
+      const { email } = req.params;
+      const users = await userCollections.find({ email: email }).toArray();
       res.send(users);
     });
 
@@ -71,6 +71,19 @@ async function run() {
         console.log("Deleted tickets:", deleteResult.deletedCount);
       }
       res.send(result);
+    });
+
+    //get latest ticket 6
+    app.get('/api/ticket-kino/latest-tickets', async (req, res) => {
+      const tickets = await ticketCollections
+        .find({
+          adminApproval: "approved"
+        })
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .toArray();
+
+      res.send(tickets);
     });
 
     //create ticket
@@ -102,18 +115,35 @@ async function run() {
     app.patch('/api/allticket/:id', async (req, res) => {
       const { id } = req.params;
       const { status, ad } = req.body;
+      const ticket = await ticketCollections.findOne({
+        _id: new ObjectId(id),
+      });
 
+      if (ad === "true" && ticket.advertise !== "true") {
+        const advertiseCount = await ticketCollections.countDocuments({
+          advertise: "true",
+        });
+
+        if (advertiseCount >= 6) {
+          return res.status(400).send({
+            message: "Maximum advertisement limit reached",
+          });
+        }
+      }
       const result = await ticketCollections.updateOne(
         { _id: new ObjectId(id) },
         {
           $set: {
             adminApproval: status,
-            advertise: ad || ''
-          }
+            advertise: ad || "",
+          },
         }
       );
-      res.send(result);
-    })
+      res.send({
+        success: true,
+        result,
+      });
+    });
 
 
     await client.db("admin").command({ ping: 1 });
