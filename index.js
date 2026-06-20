@@ -86,6 +86,30 @@ async function run() {
       res.send(tickets);
     });
 
+    //get all tickets
+    app.get('/api/ticket-kino/all-tickets', async (req, res) => {
+      const tickets = await ticketCollections
+        .find({
+          adminApproval: "approved"
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(tickets);
+    });
+
+    //get all advertise ticket
+    app.get('/api/ticket-kino/advertise-tickets', async (req, res) => {
+      const tickets = await ticketCollections
+        .find({
+          advertise: "true"
+        })
+        .limit(6)
+        .toArray();
+
+      res.send(tickets);
+    });
+
     //create ticket
     app.post('/api/allticket', async (req, res) => {
       const ticket = req.body;
@@ -98,13 +122,10 @@ async function run() {
     app.get('/api/allticket', async (req, res) => {
       try {
         const query = {};
-
         if (req.query.vendorEmail) {
           query.vendorEmail = req.query.vendorEmail;
         }
-
         const tickets = await ticketCollections.find(query).toArray();
-
         res.send(tickets);
       } catch (e) {
         console.error("Error:", e);
