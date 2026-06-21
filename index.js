@@ -1,5 +1,5 @@
 const dns = require('node:dns');
-dns.setServers(['1.1.1.1', '1.0.0.1']);
+dns.setServers(['8.8.8.8', '1.0.0.1']);
 
 const express = require("express");
 const dontenv = require("dotenv");
@@ -36,6 +36,7 @@ async function run() {
     const ticketCollections = db.collection("allticket");
     const advertiseCollections = db.collection("advertise");
     const userCollections = db.collection("user");
+    const ticketBookingCollections = db.collection("userTicket");
 
     //get all user
     app.get('/api/ticket-kino/users', async (req, res) => {
@@ -92,20 +93,18 @@ async function run() {
         .find({
           adminApproval: "approved"
         })
-        .sort({ createdAt: -1 })
         .toArray();
-
+      console.log("tickets", tickets);
       res.send(tickets);
     });
 
     app.get('/api/ticket-kino/all-tickets/:id', async (req, res) => {
-      const {id} = req.params;
+      const { id } = req.params;
       const tickets = await ticketCollections
         .find({
           adminApproval: "approved",
           _id: new ObjectId(id),
         })
-        .sort({ createdAt: -1 })
         .toArray();
 
       res.send(tickets);
@@ -178,6 +177,40 @@ async function run() {
         success: true,
         result,
       });
+    });
+
+  //user booked ticket
+    app.post("/api/booking/ticket", async (req, res) => {
+      try {
+        const ticket = req.body;
+        const ticketId = new ObjectId(ticket.ticketId);  
+        const ticketData = await ticketCollections.findOne({
+          _id: ticketId,
+        });
+        console.log("ticket",ticketData);
+        if (ticketData.quantity < ticket.quantity) {
+          return res.status(400).send({
+            success: false,
+            message: "Not enough tickets available",
+          });
+        }
+        const bookingResult = await ticketBookingCollections.insertOne(ticket);
+        console.log("q",ticket.quantity);
+        await ticketCollections.updateOne(
+          { _id: ticketId },
+          {
+            $inc: {
+              quantity: -1,
+            },
+          }
+        );
+        res.send({
+          success: true,
+          bookingResult,
+        });
+      } catch (err) {
+        res.status(500).send(err);
+      }
     });
 
 
