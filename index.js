@@ -98,6 +98,20 @@ async function run() {
       res.send(tickets);
     });
 
+    app.get('/api/ticket-kino/all-tickets/:id', async (req, res) => {
+      const {id} = req.params;
+      const tickets = await ticketCollections
+        .find({
+          adminApproval: "approved",
+          _id: new ObjectId(id),
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(tickets);
+    });
+
+
     //get all advertise ticket
     app.get('/api/ticket-kino/advertise-tickets', async (req, res) => {
       const tickets = await ticketCollections
