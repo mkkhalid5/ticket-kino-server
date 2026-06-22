@@ -219,10 +219,10 @@ async function run() {
         const {id} = req.params;
         const { status } = req.body;
         const booking = await ticketBookingCollections.findOne({
-          ticketId: id,
+          _id: new ObjectId(id),
         });
         await ticketBookingCollections.updateOne(
-          { ticketId: id },
+          { _id: new ObjectId(id) },
           {
             $set: {
               ticketStatus: status,
@@ -235,7 +235,7 @@ async function run() {
         ) {
           await ticketCollections.updateOne(
             {
-              _id: new ObjectId(id),
+              _id: new ObjectId(booking.ticketId),
             },
             {
               $inc: {
