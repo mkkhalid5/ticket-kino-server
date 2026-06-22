@@ -179,15 +179,15 @@ async function run() {
       });
     });
 
-  //user booked ticket
+    //user booked ticket
     app.post("/api/booking/ticket", async (req, res) => {
       try {
         const ticket = req.body;
-        const ticketId = new ObjectId(ticket.ticketId);  
+        const ticketId = new ObjectId(ticket.ticketId);
         const ticketData = await ticketCollections.findOne({
           _id: ticketId,
         });
-        console.log("ticket",ticketData);
+        console.log("ticket", ticketData);
         if (ticketData.quantity < ticket.quantity) {
           return res.status(400).send({
             success: false,
@@ -195,13 +195,13 @@ async function run() {
           });
         }
         const bookingResult = await ticketBookingCollections.insertOne(ticket);
-        console.log("q",ticket.quantity);
+        console.log("q", ticket.quantity);
         await ticketCollections.updateOne(
           { _id: ticketId },
           {
             $inc: {
               quantity: -1,
-              
+
             },
           }
         );
@@ -214,8 +214,54 @@ async function run() {
       }
     });
 
+    app.patch("/api/booking/ticket/:id", async (req, res) => {
+      try {
+        const {id} = req.params;
+        const { status } = req.body;
+        const booking = await ticketBookingCollections.findOne({
+          ticketId: id,
+        });
+        await ticketBookingCollections.updateOne(
+          { ticketId: id },
+          {
+            $set: {
+              ticketStatus: status,
+            },
+          }
+        );
+        if (
+          status === "rejected" &&
+          booking.status !== "rejected"
+        ) {
+          await ticketCollections.updateOne(
+            {
+              _id: new ObjectId(id),
+            },
+            {
+              $inc: {
+                quantity: booking.totalBuy,
+              },
+            }
+          );
+        }
+        res.send({success: true, message: "Booking Updated",});
+      } catch (err) {
+        res.status(500).send(err);
+      }
+    });
+
+    //find all booked ticket by user
+    app.get("/api/booking/ticket/", async (req, res) => {
+      const result = await ticketBookingCollections.find().toArray();
+      res.send(result)
+    });
+
     //find ticket by userEmail
-    app.get("/api/booking/ticket/:")
+    app.get("/api/booking/ticket/:email", async (req, res) => {
+      const { email } = req.params;
+      const result = await ticketBookingCollections.find({ userEmail: email }).toArray();
+      res.send(result)
+    });
 
 
     await client.db("admin").command({ ping: 1 });
