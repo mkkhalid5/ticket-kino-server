@@ -201,6 +201,7 @@ async function run() {
           {
             $inc: {
               quantity: -1,
+              
             },
           }
         );
@@ -212,6 +213,9 @@ async function run() {
         res.status(500).send(err);
       }
     });
+
+    //find ticket by userEmail
+    app.get("/api/booking/ticket/:")
 
 
     await client.db("admin").command({ ping: 1 });
