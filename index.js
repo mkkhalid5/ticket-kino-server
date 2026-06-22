@@ -187,7 +187,7 @@ async function run() {
         const ticketData = await ticketCollections.findOne({
           _id: ticketId,
         });
-        console.log("ticket", ticketData);
+        console.log("ticket", ticket);
         if (ticketData.quantity < ticket.quantity) {
           return res.status(400).send({
             success: false,
@@ -200,8 +200,7 @@ async function run() {
           { _id: ticketId },
           {
             $inc: {
-              quantity: -1,
-
+              quantity: -ticket.totalBuy,
             },
           }
         );
