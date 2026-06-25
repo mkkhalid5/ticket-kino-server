@@ -34,10 +34,6 @@ app.use(
   }),
 );
 
-app.use(
-  "/api/webhook",
-  express.raw({ type: "application/json" })
-);
 app.use(express.json());
 
 const client = new MongoClient(uri, {
@@ -50,7 +46,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("ticket-kino");
 
     const ticketCollections = db.collection("allticket");
@@ -367,9 +363,9 @@ async function run() {
             },
           ],
           success_url:
-            "http://localhost:3000/payment-success?session_id={CHECKOUT_SESSION_ID}",
+            `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url:
-            "http://localhost:3000/payment-cancel",
+            `${process.env.CLIENT_URL}/payment-cancel`,
           metadata: {
             bookingId: booking._id.toString(),
           },
@@ -426,10 +422,10 @@ async function run() {
     });
 
 
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!",
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!",
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
