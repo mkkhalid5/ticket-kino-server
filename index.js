@@ -4,8 +4,23 @@ dns.setServers(['8.8.8.8', '1.0.0.1']);
 const express = require("express");
 const dontenv = require("dotenv");
 const cors = require("cors");
+const Stripe = require("stripe");
+const cloudinary = require("cloudinary").v2;
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 dontenv.config();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const multer = require("multer");
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+});
 
 const uri = process.env.MONGODB_URI;
 
@@ -17,6 +32,11 @@ app.use(
     credentials: true,
     origin: [process.env.CLIENT_URL],
   }),
+);
+
+app.use(
+  "/api/webhook",
+  express.raw({ type: "application/json" })
 );
 app.use(express.json());
 
@@ -30,13 +50,36 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
     const db = client.db("ticket-kino");
 
     const ticketCollections = db.collection("allticket");
     const advertiseCollections = db.collection("advertise");
     const userCollections = db.collection("user");
     const ticketBookingCollections = db.collection("userTicket");
+
+    app.post("/api/upload", upload.single("image"), async (req, res) => {
+
+      //imageUpload Cloudinary
+      try {
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            {
+              folder: "ticket-booking",
+            },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result);
+            }
+          ).end(req.file.buffer);
+        });
+        res.send({
+          image: result.secure_url,
+        });
+      } catch (err) {
+        res.status(500).send(err);
+      }
+    });
 
     //get all user
     app.get('/api/ticket-kino/users', async (req, res) => {
@@ -125,11 +168,55 @@ async function run() {
 
     //create ticket
     app.post('/api/allticket', async (req, res) => {
-      const ticket = req.body;
-      console.log('req-Ticket:', ticket);
-      const result = await ticketCollections.insertOne(ticket);
-      console.log('result:', result);
-      res.send(result);
+      try {
+        const ticket = req.body;
+        console.log("Ticket:", ticket);
+        // MongoDB Insert
+        const result = await ticketCollections.insertOne(ticket);
+        // Stripe Product
+        const product = await stripe.products.create({
+          name: ticket.ticketTitle,
+          description: `${ticket.fromLocation} → ${ticket.toLocation}`,
+          images: [ticket.image],
+          metadata: {
+            ticketId: result.insertedId.toString()
+          }
+        });
+        const usd = ticket.price / 120;
+        // Stripe Price
+        const stripePrice = await stripe.prices.create({
+          product: product.id,
+          // unit_amount_: ticket.price * 100,
+          unit_amount: Math.round(usd * 100),
+          currency: "usd",
+        });
+        // MongoDB Update
+        await ticketCollections.updateOne(
+          {
+            _id: result.insertedId
+          },
+          {
+            $set: {
+              stripeProductId: product.id,
+              stripePriceId: stripePrice.id
+            }
+          }
+        );
+        res.send({
+          success: true,
+          ticketId: result.insertedId,
+          stripeProductId: product.id,
+          stripePriceId: stripePrice.id
+        });
+
+      }
+      catch (error) {
+        console.log(error);
+        res.status(500).send({
+          success: false,
+          message: error.message
+        });
+      }
     });
 
     app.get('/api/allticket', async (req, res) => {
@@ -215,7 +302,7 @@ async function run() {
 
     app.patch("/api/booking/ticket/:id", async (req, res) => {
       try {
-        const {id} = req.params;
+        const { id } = req.params;
         const { status } = req.body;
         const booking = await ticketBookingCollections.findOne({
           _id: new ObjectId(id),
@@ -243,7 +330,7 @@ async function run() {
             }
           );
         }
-        res.send({success: true, message: "Booking Updated",});
+        res.send({ success: true, message: "Booking Updated", });
       } catch (err) {
         res.status(500).send(err);
       }
@@ -263,10 +350,85 @@ async function run() {
     });
 
 
-    // await client.db("admin").command({ ping: 1 });
-    // console.log(
-    //   "Pinged your deployment. You successfully connected to MongoDB!",
-    // );
+    //stripe paymet api
+    app.post("/api/create-checkout-session", async (req, res) => {
+      try {
+        const { bookingId } = req.body;
+        const booking = await ticketBookingCollections.findOne({
+          _id: new ObjectId(bookingId),
+        });
+        const session = await stripe.checkout.sessions.create({
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price: booking.stripePriceId,
+              quantity: booking.totalBuy,
+            },
+          ],
+          success_url:
+            "http://localhost:3000/payment-success?session_id={CHECKOUT_SESSION_ID}",
+          cancel_url:
+            "http://localhost:3000/payment-cancel",
+          metadata: {
+            bookingId: booking._id.toString(),
+          },
+        });
+        res.send({
+          success: true,
+          url: session.url,
+        });
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({
+          success: false,
+          message: err.message,
+        });
+      }
+    });
+
+
+    app.post("/api/payment-success", async (req, res) => {
+      try {
+        const { sessionId } = req.body;
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        if (session.payment_status !== "paid") {
+          return res.send({
+            success: false,
+            message: "Payment not completed",
+          });
+
+        }
+        const bookingId = session.metadata.bookingId;
+        await ticketBookingCollections.updateOne(
+          {
+            _id: new ObjectId(bookingId),
+          },
+          {
+            $set: {
+              paymentStatus: "paid",
+              paidAt: new Date(),
+              stripeSessionId: session.id,
+            },
+          }
+        );
+        res.send({
+          success: true,
+        });
+      } catch (err) {
+        console.log(err);
+        res.status(500).send({
+          success: false,
+          message: err.message,
+        });
+      }
+    });
+
+
+    await client.db("admin").command({ ping: 1 });
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!",
+    );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
