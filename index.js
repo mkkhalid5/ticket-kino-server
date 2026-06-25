@@ -409,6 +409,7 @@ async function run() {
               paymentStatus: "paid",
               paidAt: new Date(),
               stripeSessionId: session.id,
+              stripeTrx: session.payment_intent
             },
           }
         );
