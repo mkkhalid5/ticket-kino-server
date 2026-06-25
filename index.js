@@ -127,14 +127,63 @@ async function run() {
     });
 
     //get all tickets
-    app.get('/api/ticket-kino/all-tickets', async (req, res) => {
-      const tickets = await ticketCollections
-        .find({
-          adminApproval: "approved"
-        })
-        .toArray();
-      console.log("tickets", tickets);
-      res.send(tickets);
+    app.get("/api/ticket-kino/all-tickets", async (req, res) => {
+      try {
+        const {
+          from,
+          to,
+          transportType,
+          minPrice,
+          maxPrice,
+          sort,
+        } = req.query;
+        const query = {
+          adminApproval: "approved",
+        };
+        if (from) {
+          query.fromLocation = {
+            $regex: from,
+            $options: "i",
+          };
+        }
+        if (to) {
+          query.toLocation = {
+            $regex: to,
+            $options: "i",
+          };
+        }
+        if (
+          transportType &&
+          transportType !== "all"
+        ) {
+          query.transportType = transportType;
+        }
+        if (minPrice || maxPrice) {
+          query.price = {};
+          if (minPrice) {
+            query.price.$gte = Number(minPrice);
+          }
+          if (maxPrice) {
+            query.price.$lte = Number(maxPrice);
+          }
+        }
+        const sortOption = {};
+        if (sort === "low") {
+          sortOption.price = 1;
+        }
+        if (sort === "high") {
+          sortOption.price = -1;
+        }
+        const tickets = await ticketCollections
+          .find(query)
+          .sort(sortOption)
+          .toArray();
+        res.send(tickets);
+      } catch (err) {
+        res.status(500).send({
+          message: err.message,
+        });
+      }
     });
 
     app.get('/api/ticket-kino/all-tickets/:id', async (req, res) => {
