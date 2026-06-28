@@ -17,6 +17,7 @@ cloudinary.config({
 });
 
 const multer = require("multer");
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -41,9 +42,51 @@ const client = new MongoClient(uri, {
   },
 });
 
+const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URL}/api/auth/jwks`));
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if(!authHeader || !authHeader.startsWith("Bearer")){
+    return res.status(401).json({ msg: "Unauthorized"});
+  }
+  const token = authHeader.split(" ")[1];
+  console.log("token",token);
+  if(!token){
+    return res.status(401).json({ msg: "Unauthorized"});
+  }
+  try{
+    const {payload} = await jwtVerify(token, JWKS)
+    req.user = payload;
+    next();
+  }
+  catch(e){
+    console.log(e);
+    return res.status(401).json({ msg: "Unauthorized"});
+  }
+}
+
+const adminVerify = async (req, res, next) => {
+  const user = req.user;
+  console.log("usar",user);
+  if(user.role !== "admin"){{
+    return res.status(403).json({ msg: "Forbidden Access"});
+  }}
+  next();
+}
+
+const travelerVerify = async (req, res, next) => {
+  const user = req.user;
+  console.log('user',user);
+  if(user.role !== "traveler"){{
+    return res.status(403).json({ msg: "Forbidden Access"});
+  }}
+  next();
+}
+
 async function run() {
   try {
-    // await client.connect();
+     await client.connect();
     const db = client.db("ticket-kino");
 
     const ticketCollections = db.collection("allticket");
@@ -75,18 +118,18 @@ async function run() {
     });
 
     //get all user
-    app.get('/api/ticket-kino/users', async (req, res) => {
+    app.get('/api/ticket-kino/users',verifyToken,adminVerify, async (req, res) => {
       const users = await userCollections.find().toArray();
       res.send(users);
     });
 
-    app.get('/api/ticket-kino/users/:email', async (req, res) => {
+    app.get('/api/ticket-kino/users/:email',verifyToken, async (req, res) => {
       const { email } = req.params;
       const users = await userCollections.find({ email: email }).toArray();
       res.send(users);
     });
 
-    app.patch('/api/ticket-kino/users/:id', async (req, res) => {
+    app.patch('/api/ticket-kino/users/:id',verifyToken, async (req, res) => {
       const { id } = req.params;
       const { role, status } = req.body;
       const user = await userCollections.findOne({
@@ -111,7 +154,7 @@ async function run() {
     });
 
     //get latest ticket 6
-    app.get('/api/ticket-kino/latest-tickets', async (req, res) => {
+    app.get('/api/ticket-kino/latest-tickets',verifyToken, async (req, res) => {
       const tickets = await ticketCollections
         .find({
           adminApproval: "approved"
@@ -124,7 +167,7 @@ async function run() {
     });
 
     //get all tickets
-    app.get("/api/ticket-kino/all-tickets", async (req, res) => {
+    app.get("/api/ticket-kino/all-tickets",verifyToken, async (req, res) => {
       try {
         const {
           from,
@@ -183,7 +226,7 @@ async function run() {
       }
     });
 
-    app.get('/api/ticket-kino/all-tickets/:id', async (req, res) => {
+    app.get('/api/ticket-kino/all-tickets/:id',verifyToken, async (req, res) => {
       const { id } = req.params;
       const tickets = await ticketCollections
         .find({
@@ -197,7 +240,7 @@ async function run() {
 
 
     //get all advertise ticket
-    app.get('/api/ticket-kino/advertise-tickets', async (req, res) => {
+    app.get('/api/ticket-kino/advertise-tickets',verifyToken, async (req, res) => {
       const tickets = await ticketCollections
         .find({
           advertise: "true"
@@ -209,7 +252,7 @@ async function run() {
     });
 
     //create ticket
-    app.post('/api/allticket', async (req, res) => {
+    app.post('/api/allticket',verifyToken, async (req, res) => {
       try {
         const ticket = req.body;
         console.log("Ticket:", ticket);
@@ -261,7 +304,7 @@ async function run() {
       }
     });
 
-    app.get('/api/allticket', async (req, res) => {
+    app.get('/api/allticket',verifyToken, async (req, res) => {
       try {
         const query = {};
         if (req.query.vendorEmail) {
@@ -275,7 +318,7 @@ async function run() {
       }
     });
 
-    app.patch('/api/allticket/:id', async (req, res) => {
+    app.patch('/api/allticket/:id',verifyToken, async (req, res) => {
       const { id } = req.params;
       const { status, ad } = req.body;
       const ticket = await ticketCollections.findOne({
@@ -309,7 +352,7 @@ async function run() {
     });
 
     //user booked ticket
-    app.post("/api/booking/ticket", async (req, res) => {
+    app.post("/api/booking/ticket",verifyToken, travelerVerify, async (req, res) => {
       try {
         const ticket = req.body;
         const ticketId = new ObjectId(ticket.ticketId);
@@ -342,7 +385,7 @@ async function run() {
       }
     });
 
-    app.patch("/api/booking/ticket/:id", async (req, res) => {
+    app.patch("/api/booking/ticket/:id",verifyToken, async (req, res) => {
       try {
         const { id } = req.params;
         const { status } = req.body;
@@ -379,13 +422,13 @@ async function run() {
     });
 
     //find all booked ticket by user
-    app.get("/api/booking/ticket/", async (req, res) => {
+    app.get("/api/booking/ticket/",verifyToken, async (req, res) => {
       const result = await ticketBookingCollections.find().toArray();
       res.send(result)
     });
 
     //find ticket by userEmail
-    app.get("/api/booking/ticket/:email", async (req, res) => {
+    app.get("/api/booking/ticket/:email",verifyToken, async (req, res) => {
       const { email } = req.params;
       const result = await ticketBookingCollections.find({ userEmail: email }).toArray();
       res.send(result)
@@ -393,7 +436,7 @@ async function run() {
 
 
     //stripe paymet api
-    app.post("/api/create-checkout-session", async (req, res) => {
+    app.post("/api/create-checkout-session",verifyToken, async (req, res) => {
       try {
         const { bookingId } = req.body;
         const booking = await ticketBookingCollections.findOne({
@@ -430,7 +473,7 @@ async function run() {
     });
 
 
-    app.post("/api/payment-success", async (req, res) => {
+    app.post("/api/payment-success",verifyToken, async (req, res) => {
       try {
         const { sessionId } = req.body;
         const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -468,10 +511,10 @@ async function run() {
     });
 
 
-    // await client.db("admin").command({ ping: 1 });
-    // console.log(
-    //   "Pinged your deployment. You successfully connected to MongoDB!",
-    // );
+    await client.db("admin").command({ ping: 1 });
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!",
+    );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
