@@ -51,7 +51,7 @@ const verifyToken = async (req, res, next) => {
     return res.status(401).json({ msg: "Unauthorized"});
   }
   const token = authHeader.split(" ")[1];
-  console.log("token",token);
+  
   if(!token){
     return res.status(401).json({ msg: "Unauthorized"});
   }
@@ -154,7 +154,7 @@ async function run() {
     });
 
     //get latest ticket 6
-    app.get('/api/ticket-kino/latest-tickets',verifyToken, async (req, res) => {
+    app.get('/api/ticket-kino/latest-tickets', async (req, res) => {
       const tickets = await ticketCollections
         .find({
           adminApproval: "approved"
@@ -167,7 +167,7 @@ async function run() {
     });
 
     //get all tickets
-    app.get("/api/ticket-kino/all-tickets",verifyToken, async (req, res) => {
+    app.get("/api/ticket-kino/all-tickets", async (req, res) => {
       try {
         const {
           from,
@@ -240,7 +240,7 @@ async function run() {
 
 
     //get all advertise ticket
-    app.get('/api/ticket-kino/advertise-tickets',verifyToken, async (req, res) => {
+    app.get('/api/ticket-kino/advertise-tickets', async (req, res) => {
       const tickets = await ticketCollections
         .find({
           advertise: "true"
