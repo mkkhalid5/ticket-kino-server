@@ -270,7 +270,7 @@ async function run() {
     });
 
     //create ticket
-    app.post('/api/allticket', verifyToken, async (req, res) => {
+    app.post('/api/allticket', async (req, res) => {
       try {
         const ticket = req.body;
         console.log("Ticket:", ticket);
