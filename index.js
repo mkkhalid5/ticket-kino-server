@@ -454,7 +454,7 @@ async function run() {
 
 
     //stripe paymet api
-    app.post("/api/create-checkout-session", verifyToken, async (req, res) => {
+    app.post("/api/create-checkout-session", async (req, res) => {
       try {
         const { bookingId } = req.body;
         const booking = await ticketBookingCollections.findOne({
@@ -491,7 +491,7 @@ async function run() {
     });
 
 
-    app.post("/api/payment-success", verifyToken, async (req, res) => {
+    app.post("/api/payment-success", async (req, res) => {
       try {
         const { sessionId } = req.body;
         const session = await stripe.checkout.sessions.retrieve(sessionId);
