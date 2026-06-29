@@ -181,27 +181,32 @@ async function run() {
           maxPrice,
           sort,
         } = req.query;
+        // Search Query
         const query = {
           adminApproval: "approved",
         };
+        // From Location
         if (from) {
           query.fromLocation = {
             $regex: from,
             $options: "i",
           };
         }
+        // To Location
         if (to) {
           query.toLocation = {
             $regex: to,
             $options: "i",
           };
         }
-        if (
-          transportType &&
-          transportType !== "all"
-        ) {
-          query.transportType = transportType;
+        // Transport Filter
+        if (transportType && transportType !== "all") {
+          query.transportType = {
+            $regex: `^${transportType}$`,
+            $options: "i",
+          };
         }
+        // Price Filter
         if (minPrice || maxPrice) {
           query.price = {};
           if (minPrice) {
@@ -211,21 +216,30 @@ async function run() {
             query.price.$lte = Number(maxPrice);
           }
         }
-        const sortOption = {};
-        if (sort === "low") {
-          sortOption.price = 1;
+        // Sort Option
+        let sortOption = {};
+        switch (sort) {
+          case "low":
+            sortOption.price = 1;
+            break;
+          case "high":
+            sortOption.price = -1;
+            break;
+          default:
+            sortOption = {};
         }
-        if (sort === "high") {
-          sortOption.price = -1;
-        }
+        // Get Tickets
         const tickets = await ticketCollections
           .find(query)
           .sort(sortOption)
           .toArray();
-        res.send(tickets);
-      } catch (err) {
+        res.status(200).send(tickets);
+      } catch (error) {
+        console.error(error);
         res.status(500).send({
-          message: err.message,
+          success: false,
+          message: "Failed to fetch tickets.",
+          error: error.message,
         });
       }
     });
@@ -514,8 +528,8 @@ async function run() {
       }
     });
 
-    app.get("/api/paid/all-tickets/:vendorEmail",verifyToken, async (req, res) => {
-      const {vendorEmail} = req.params;
+    app.get("/api/paid/all-tickets/:vendorEmail", verifyToken, async (req, res) => {
+      const { vendorEmail } = req.params;
       const result = await ticketBookingCollections.find(
         {
           vendorEmail,
